@@ -52,6 +52,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
   final RxBool _editHover = false.obs;
   final RxBool _block = false.obs;
+  final RxString _localIp = ''.obs;
 
   final GlobalKey _childKey = GlobalKey();
 
@@ -386,6 +387,24 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     );
   }
 
+  Future<void> _loadLocalIp() async {
+    // 优先用 TCP 探测通往 hbbs 的出口 IP（最准确），失败回退网卡列表
+    try {
+      final socket = await Socket.connect('10.196.45.6', 21116,
+          timeout: const Duration(seconds: 2));
+      _localIp.value = socket.address.address;
+      socket.destroy();
+    } catch (_) {
+      try {
+        final ifaces = await NetworkInterface.list(
+            includeLoopback: false, type: InternetAddressType.ipv4);
+        if (ifaces.isNotEmpty) {
+          _localIp.value = ifaces.first.addresses.first.address;
+        }
+      } catch (_) {}
+    }
+  }
+
   buildTip(BuildContext context) {
     final isOutgoingOnly = bind.isOutgoingOnly();
     return Padding(
@@ -405,7 +424,17 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
-            ],
+                if (!isOutgoingOnly)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Obx(() => Text(
+                      _localIp.value.isEmpty
+                          ? '本机IP: 获取中...'
+                          : '本机IP: ${_localIp.value}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    )),
+                  ).marginOnly(top: 6),
+          ],
           ),
           SizedBox(
             height: 10.0,
@@ -695,6 +724,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   @override
   void initState() {
     super.initState();
+    _loadLocalIp();
     _updateTimer = periodic_immediate(const Duration(seconds: 1), () async {
       await gFFI.serverModel.fetchID();
       final error = await bind.mainGetError();

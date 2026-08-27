@@ -120,7 +120,6 @@ class AbModel {
   Future<void> pullAb(
       {required ForcePullAb? force, required bool quiet}) async {
     if (bind.isDisableAb()) return;
-    if (!gFFI.userModel.isLogin) return;
     if (gFFI.userModel.networkError.isNotEmpty) return;
     if (_pulling) return;
     if (force == null && _pulledOnce) {
@@ -147,13 +146,18 @@ class AbModel {
       try {
         // Read personal guid every time to avoid upgrading the server without closing the main window
         _personalAbGuid = null;
-        // `true`: continue init. `false`: stop, error already recorded.
-        if (!await _getPersonalAbGuid(quiet: quiet)) {
-          return;
-        }
-        legacyMode.value = _personalAbGuid == null;
-        if (!legacyMode.value && _maxPeerOneAb == 0) {
-          await _getAbSettings(quiet: quiet);
+        if (!gFFI.userModel.isLogin) {
+          // 自建/本地服务器：不登录也使用本地地址簿
+          legacyMode.value = true;
+        } else {
+          // `true`: continue init. `false`: stop, error already recorded.
+          if (!await _getPersonalAbGuid(quiet: quiet)) {
+            return;
+          }
+          legacyMode.value = _personalAbGuid == null;
+          if (!legacyMode.value && _maxPeerOneAb == 0) {
+            await _getAbSettings(quiet: quiet);
+          }
         }
         if (_personalAbGuid != null) {
           debugPrint("pull ab list");

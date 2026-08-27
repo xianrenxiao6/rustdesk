@@ -39,11 +39,7 @@ class _AddressBookState extends State<AddressBook> {
 
   @override
   Widget build(BuildContext context) => Obx(() {
-        if (!gFFI.userModel.isLogin) {
-          return Center(
-              child: ElevatedButton(
-                  onPressed: loginDialog, child: Text(translate("Login"))));
-        } else if (gFFI.userModel.networkError.isNotEmpty) {
+        if (gFFI.userModel.networkError.isNotEmpty) {
           return netWorkErrorWidget();
         } else {
           return Column(
@@ -424,6 +420,7 @@ class _AddressBookState extends State<AddressBook> {
     final canWrite = gFFI.abModel.current.canWrite();
     final items = [
       if (canWrite) getEntry(translate("Add ID"), addIdToCurrentAb),
+      if (canWrite) getEntry(translate("Import IPs"), importIpsDialog),
       if (canWrite) getEntry(translate("Add Tag"), abAddTag),
       getEntry(translate("Unselect all tags"), gFFI.abModel.unsetSelectedTags),
       if (gFFI.abModel.legacyMode.value)
@@ -670,6 +667,56 @@ class _AddressBookState extends State<AddressBook> {
         actions: [
           dialogButton("Cancel", onPressed: close, isOutline: true),
           dialogButton("OK", onPressed: submit),
+        ],
+        onSubmit: submit,
+        onCancel: close,
+      );
+    });
+  }
+
+  void importIpsDialog() {
+    final controller = TextEditingController();
+    gFFI.dialogManager.show((setState, close, context) {
+      submit() async {
+        final text = controller.text;
+        final lines = text
+            .split(RegExp(r'[\s,;\n]+'))
+            .where((e) => e.trim().isNotEmpty)
+            .toList();
+        int added = 0;
+        for (final line in lines) {
+          final parts = line.trim().split(RegExp(r'\s+'));
+          final ip = parts[0];
+          final name = parts.length > 1 ? parts.sublist(1).join(' ') : ip;
+          if (gFFI.abModel.idContainByCurrent(ip)) continue;
+          final err = await gFFI.abModel.addIdToCurrent(ip, name, '', <dynamic>[], '');
+          if (err == null) added++;
+        }
+        BotToast.showText(text: '已导入 $added 个设备');
+        close();
+      }
+
+      return CustomAlertDialog(
+        title: Text(translate('Import IPs')),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('每行一个：IP [自定义名称]（名称可选，空格分隔）',
+                style: TextStyle(fontSize: 12)),
+            const SizedBox(height: 8),
+            TextField(
+              maxLines: 12,
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: '10.196.3.25 内科1\n10.196.3.26 内科2',
+                border: OutlineInputBorder(),
+              ),
+            ).workaroundFreezeLinuxMint(),
+          ],
+        ),
+        actions: [
+          dialogButton('Cancel', onPressed: close, isOutline: true),
+          dialogButton('Import', onPressed: submit),
         ],
         onSubmit: submit,
         onCancel: close,

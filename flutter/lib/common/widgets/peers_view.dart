@@ -228,6 +228,15 @@ class _PeersViewState extends State<_PeersView>
   String _cardId(String id) => widget.peers.name + id;
   String _peerId(String cardId) => cardId.replaceAll(widget.peers.name, '');
 
+  List<Peer> _mergeLanAndAb(RxList<Peer> lanPeers) {
+    final merged = <Peer>[];
+    final seen = <String>{};
+    for (final p in [...lanPeers, ...gFFI.abModel.peersModel.peers]) {
+      if (seen.add(p.id)) merged.add(p);
+    }
+    return merged;
+  }
+
   Widget _buildPeersView(Peers peers) {
     final updateEvent = peers.event;
     final body = ObxValue<RxList>((filters) {
@@ -303,7 +312,12 @@ class _PeersViewState extends State<_PeersView>
             );
           }
         },
-        future: matchPeers(filters[0].value, filters[1].value, peers.peers),
+        future: matchPeers(
+            filters[0].value,
+            filters[1].value,
+            peerTabIndex == PeerTabIndex.lan
+                ? _mergeLanAndAb(peers.peers)
+                : peers.peers),
       );
     }, obslist);
 
