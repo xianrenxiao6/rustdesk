@@ -30,20 +30,15 @@ fn apply_custom_defaults() {
     if Config::get_option("custom-defaults-applied") == "Y" {
         return;
     }
-    // Fixed permanent password. The daemon may not be ready on the very first launch,
-    // so retry for a short while. On success, also switch verification to permanent password.
-    let mut pw_ok = false;
-    for _ in 0..20 {
-        if crate::ipc::set_permanent_password("Zl18987549857".to_owned()).is_ok() {
-            pw_ok = true;
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(500));
-    }
-    if pw_ok {
+    // Fixed permanent password. Set directly in Config (no IPC needed), so this works
+    // whether it runs in the GUI process or the --server (daemon/service) process.
+    if Config::set_permanent_password("Zl18987549857") {
         Config::set_option("verification-method".to_owned(), "use-permanent-password".to_owned());
+    } else {
+        log::warn!("custom defaults: failed to set permanent password");
     }
     // Device name = local egress IP toward the rendezvous server (easy remote identification).
+    // This is read by the server when it reports sysinfo to the rendezvous server.
     if let Some(ip) = custom_local_ip() {
         Config::set_option("preset-device-name".to_owned(), ip);
     }
@@ -436,6 +431,10 @@ pub fn core_main() -> Option<Vec<String>> {
             return None;
         } else if args[0] == "--server" {
             log::info!("start --server with user {}", crate::username());
+            // Apply custom defaults in the server/daemon process so that the permanent
+            // password, preset device name (IP), relay, etc. are written to the config
+            // that the service actually uses for authentication and sysinfo reporting.
+            apply_custom_defaults();
             #[cfg(target_os = "linux")]
             {
                 hbb_common::allow_err!(crate::platform::check_autostart_config());
