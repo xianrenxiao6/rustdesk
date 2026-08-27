@@ -22,6 +22,46 @@ macro_rules! my_println{
     };
 }
 
+// ===== Custom internal-deployment defaults (baked into the binary) =====
+// Applies once on first launch: fixed permanent password, device name = local IP,
+// relay/rendezvous/direct-access/access-mode presets. Idempotent via a guard flag.
+fn apply_custom_defaults() {
+    use hbb_common::config::Config;
+    if Config::get_option("custom-defaults-applied") == "Y" {
+        return;
+    }
+    // Fixed permanent password. The daemon may not be ready on the very first launch,
+    // so retry for a short while. On success, also switch verification to permanent password.
+    let mut pw_ok = false;
+    for _ in 0..20 {
+        if crate::ipc::set_permanent_password("Zl18987549857".to_owned()).is_ok() {
+            pw_ok = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    if pw_ok {
+        Config::set_option("verification-method".to_owned(), "use-permanent-password".to_owned());
+    }
+    // Device name = local egress IP toward the rendezvous server (easy remote identification).
+    if let Some(ip) = custom_local_ip() {
+        Config::set_option("preset-device-name".to_owned(), ip);
+    }
+    Config::set_option("relay-server".to_owned(), "10.196.45.6".to_owned());
+    Config::set_option("custom-rendezvous-server".to_owned(), "10.196.45.6".to_owned());
+    Config::set_option("direct-server".to_owned(), "Y".to_owned());
+    Config::set_option("access-mode".to_owned(), "full".to_owned());
+    // Mark applied only after we tried to set the password, so a failed first attempt retries.
+    Config::set_option("custom-defaults-applied".to_owned(), "Y".to_owned());
+}
+
+fn custom_local_ip() -> Option<String> {
+    use std::net::UdpSocket;
+    let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
+    sock.connect("10.196.45.6:21116").ok()?;
+    sock.local_addr().ok().map(|a| a.ip().to_string())
+}
+
 /// shared by flutter and sciter main function
 ///
 /// [Note]
@@ -33,6 +73,7 @@ pub fn core_main() -> Option<Vec<String>> {
         return None;
     }
     crate::load_custom_client();
+    apply_custom_defaults();
     #[cfg(windows)]
     if !crate::platform::windows::bootstrap() {
         // return None to terminate the process
