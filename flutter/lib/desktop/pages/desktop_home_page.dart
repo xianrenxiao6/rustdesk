@@ -388,21 +388,46 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   Future<void> _loadLocalIp() async {
-    // 优先用 TCP 探测通往 hbbs 的出口 IP（最准确），失败回退网卡列表
+    // 优先取本地网卡 IPv4（192.168/10/172 私网），拿不到再回退 TCP 探测 hbbs 出口
+    try {
+      final ifaces = await NetworkInterface.list(
+          includeLoopback: false, type: InternetAddressType.IPv4);
+      String? picked;
+      int bestRank = 999;
+      for (final iface in ifaces) {
+        for (final addr in iface.addresses) {
+          final ip = addr.address;
+          // 排除链路本地/无效地址
+          if (ip.startsWith('169.254.') || ip == '0.0.0.0') continue;
+          int rank;
+          if (ip.startsWith('192.168.')) {
+            rank = 1;
+          } else if (ip.startsWith('10.')) {
+            rank = 2;
+          } else if (RegExp(r'^172\.(1[6-9]|2\d|3[01])\.').hasMatch(ip)) {
+            rank = 3;
+          } else {
+            rank = 4;
+          }
+          if (rank < bestRank) {
+            bestRank = rank;
+            picked = ip;
+          }
+        }
+      }
+      if (picked != null) {
+        _localIp.value = picked;
+        return;
+      }
+    } catch (_) {}
+
+    // 回退：TCP 探测 hbbs 出口 IP
     try {
       final socket = await Socket.connect('10.196.45.6', 21116,
           timeout: const Duration(seconds: 2));
       _localIp.value = socket.address.address;
       socket.destroy();
-    } catch (_) {
-      try {
-        final ifaces = await NetworkInterface.list(
-            includeLoopback: false, type: InternetAddressType.IPv4);
-        if (ifaces.isNotEmpty) {
-          _localIp.value = ifaces.first.addresses.first.address;
-        }
-      } catch (_) {}
-    }
+    } catch (_) {}
   }
 
   buildTip(BuildContext context) {

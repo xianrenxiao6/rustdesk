@@ -195,7 +195,13 @@ class AbModel {
               : _personalAddressBookName);
         }
         // pull current address book
-        await current.pullAb(quiet: quiet);
+        if (gFFI.userModel.isLogin) {
+          await current.pullAb(quiet: quiet);
+        } else {
+          // 未登录（自建/本地服务器）：不请求服务器 API，直接初始化空 legacy 地址簿
+          // 避免调用 http://hbbs:21114/api/ab 导致连接拒绝弹窗
+          current.initialized = true;
+        }
         // try initialize personal address book
         if (!current.isPersonal()) {
           final personalAb = addressbooks[_personalAddressBookName];
