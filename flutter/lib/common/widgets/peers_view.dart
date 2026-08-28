@@ -228,7 +228,7 @@ class _PeersViewState extends State<_PeersView>
   String _cardId(String id) => widget.peers.name + id;
   String _peerId(String cardId) => cardId.replaceAll(widget.peers.name, '');
 
-  List<Peer> _mergeLanAndAb(RxList<Peer> lanPeers) {
+  List<Peer> _mergeLanAndAb(List<Peer> lanPeers) {
     final merged = <Peer>[];
     final seen = <String>{};
     for (final p in [...lanPeers, ...gFFI.abModel.peersModel.peers]) {
