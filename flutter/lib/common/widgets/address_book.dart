@@ -20,7 +20,6 @@ import 'package:flex_color_picker/flex_color_picker.dart';
 
 import '../../common.dart';
 import 'dialog.dart';
-import 'login.dart';
 
 final hideAbTagsPanel = false.obs;
 

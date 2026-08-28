@@ -397,7 +397,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     } catch (_) {
       try {
         final ifaces = await NetworkInterface.list(
-            includeLoopback: false, type: InternetAddressType.ipv4);
+            includeLoopback: false, type: InternetAddressType.IPv4);
         if (ifaces.isNotEmpty) {
           _localIp.value = ifaces.first.addresses.first.address;
         }

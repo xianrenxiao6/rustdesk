@@ -315,7 +315,7 @@ class _PeersViewState extends State<_PeersView>
         future: matchPeers(
             filters[0].value,
             filters[1].value,
-            peerTabIndex == PeerTabIndex.lan
+            widget.peerTabIndex == PeerTabIndex.lan
                 ? _mergeLanAndAb(peers.peers)
                 : peers.peers),
       );
