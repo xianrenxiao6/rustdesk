@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:http/http.dart' as http;
 
-/// 台账服务器内置默认地址（正式部署位置：全网段可达的中继服务器）
-const String kDefaultInventoryServer = 'http://10.196.45.6:8848';
+/// 台账服务器内置默认地址（服务端部署在 10.196.23.235:8848，单位静态 IP 不会变）
+const String kDefaultInventoryServer = 'http://10.196.23.235:8848';
 
 const String kOptInventoryDept = 'inventory-dept';
 const String kOptInventoryLocation = 'inventory-location';
