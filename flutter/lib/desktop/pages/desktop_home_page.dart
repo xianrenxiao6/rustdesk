@@ -474,7 +474,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                                 await showInventoryRegisterDialog(context);
                             _refreshInvSummary();
                             if (ok == true) {
-                              InventoryService.instance.report();
+                              await InventoryService.instance.report();
                             }
                           },
                           child: Row(
