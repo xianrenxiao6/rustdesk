@@ -12,10 +12,12 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
+import 'package:flutter_hbb/desktop/widgets/inventory_register_dialog.dart';
 import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
+import 'package:flutter_hbb/utils/inventory_service.dart';
 import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:flutter_hbb/utils/platform_channel.dart';
 import 'package:get/get.dart';
@@ -53,6 +55,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   final RxBool _editHover = false.obs;
   final RxBool _block = false.obs;
   final RxString _localIp = ''.obs;
+  final RxString _invSummary = ''.obs;
 
   final GlobalKey _childKey = GlobalKey();
 
@@ -389,37 +392,11 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
   Future<void> _loadLocalIp() async {
     // 优先取本地网卡 IPv4（192.168/10/172 私网），拿不到再回退 TCP 探测 hbbs 出口
-    try {
-      final ifaces = await NetworkInterface.list(
-          includeLoopback: false, type: InternetAddressType.IPv4);
-      String? picked;
-      int bestRank = 999;
-      for (final iface in ifaces) {
-        for (final addr in iface.addresses) {
-          final ip = addr.address;
-          // 排除链路本地/无效地址
-          if (ip.startsWith('169.254.') || ip == '0.0.0.0') continue;
-          int rank;
-          if (ip.startsWith('192.168.')) {
-            rank = 1;
-          } else if (ip.startsWith('10.')) {
-            rank = 2;
-          } else if (RegExp(r'^172\.(1[6-9]|2\d|3[01])\.').hasMatch(ip)) {
-            rank = 3;
-          } else {
-            rank = 4;
-          }
-          if (rank < bestRank) {
-            bestRank = rank;
-            picked = ip;
-          }
-        }
-      }
-      if (picked != null) {
-        _localIp.value = picked;
-        return;
-      }
-    } catch (_) {}
+    final ip = await InventoryService.localIp();
+    if (ip.isNotEmpty) {
+      _localIp.value = ip;
+      return;
+    }
 
     // 回退：TCP 探测 hbbs 出口 IP
     try {
@@ -428,6 +405,35 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       _localIp.value = socket.address.address;
       socket.destroy();
     } catch (_) {}
+  }
+
+  /// 台账登记：启动即上报本机信息，未登记时弹出登记窗口
+  Future<void> _initInventory() async {
+    _refreshInvSummary();
+    // 即使未登记也先上报，管理员端才能看到"已安装未登记"
+    await InventoryService.instance.report();
+    // 让主界面先渲染出来，避免弹窗与窗口初始化抢焦点
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+    if (!InventoryService.instance.isRegistered) {
+      final ok = await showInventoryRegisterDialog(context);
+      _refreshInvSummary();
+      if (ok == true) {
+        await InventoryService.instance.report();
+      }
+    }
+  }
+
+  void _refreshInvSummary() {
+    final inv = InventoryService.instance;
+    if (!inv.isRegistered) {
+      _invSummary.value = '';
+      return;
+    }
+    final user = inv.user.trim();
+    _invSummary.value = user.isEmpty
+        ? '${inv.dept} · ${inv.location}'
+        : '${inv.dept} · ${inv.location} · $user';
   }
 
   buildTip(BuildContext context) {
@@ -459,6 +465,41 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                       style: Theme.of(context).textTheme.bodySmall,
                     )),
                   ).marginOnly(top: 6),
+                if (!isOutgoingOnly)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Obx(() => GestureDetector(
+                          onTap: () async {
+                            final ok =
+                                await showInventoryRegisterDialog(context);
+                            _refreshInvSummary();
+                            if (ok == true) {
+                              InventoryService.instance.report();
+                            }
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  _invSummary.value.isEmpty
+                                      ? '点击登记本机信息（科室 / 位置）'
+                                      : _invSummary.value,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.edit, size: 12),
+                            ],
+                          ),
+                        )),
+                  ).marginOnly(top: 4),
           ],
           ),
           SizedBox(
@@ -750,6 +791,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   void initState() {
     super.initState();
     _loadLocalIp();
+    _initInventory();
     _updateTimer = periodic_immediate(const Duration(seconds: 1), () async {
       await gFFI.serverModel.fetchID();
       final error = await bind.mainGetError();
