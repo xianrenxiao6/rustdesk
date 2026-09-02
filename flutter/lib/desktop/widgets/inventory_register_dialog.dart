@@ -81,7 +81,7 @@ class _InventoryRegisterDialogState extends State<_InventoryRegisterDialog> {
       _saving = true;
     });
 
-    InventoryService.instance.saveInfo(
+    await InventoryService.instance.saveInfo(
       dept: dept,
       location: location,
       user: _userController.text,
