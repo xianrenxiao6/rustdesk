@@ -86,14 +86,14 @@ class InventoryService {
   /// 是否已登记（科室 + 位置都填了才算）
   bool get isRegistered => dept.trim().isNotEmpty && location.trim().isNotEmpty;
 
-  void saveInfo({
+  Future<void> saveInfo({
     required String dept,
     required String location,
     required String user,
-  }) {
-    bind.mainSetLocalOption(key: kOptInventoryDept, value: dept.trim());
-    bind.mainSetLocalOption(key: kOptInventoryLocation, value: location.trim());
-    bind.mainSetLocalOption(key: kOptInventoryUser, value: user.trim());
+  }) async {
+    await bind.mainSetLocalOption(key: kOptInventoryDept, value: dept.trim());
+    await bind.mainSetLocalOption(key: kOptInventoryLocation, value: location.trim());
+    await bind.mainSetLocalOption(key: kOptInventoryUser, value: user.trim());
   }
 
   // ---------- 网络 ----------
@@ -161,7 +161,7 @@ class InventoryService {
   /// 上报本机信息。静默失败，不影响客户端使用。
   Future<bool> report() async {
     try {
-      final id = bind.mainGetMyId();
+      final id = await bind.mainGetMyId();
       if (id.isEmpty) return false;
       final base = await getServerBase();
       final ip = await localIp();
